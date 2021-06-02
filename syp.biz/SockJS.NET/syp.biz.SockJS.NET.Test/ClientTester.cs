@@ -6,6 +6,8 @@ using Newtonsoft.Json;
 using syp.biz.SockJS.NET.Client;
 using syp.biz.SockJS.NET.Common.Interfaces;
 
+using WebSocketClient;
+
 namespace syp.biz.SockJS.NET.Test
 {
     [SuppressMessage("ReSharper", "UnusedType.Global")]
@@ -16,7 +18,7 @@ namespace syp.biz.SockJS.NET.Test
             var tcs = new TaskCompletionSource<bool>();
             try
             {
-                var config = Configuration.Factory.BuildDefault("http://localhost:9999/echo");
+                var config = Configuration.Factory.BuildDefault("http://localhost:9999/ws");
                 config.Logger = new ConsoleLogger();
                 config.DefaultHeaders = new WebHeaderCollection
                 {
@@ -25,14 +27,25 @@ namespace syp.biz.SockJS.NET.Test
                 };
 
                 var sockJs = (IClient)new Client.SockJS(config);
-
                 sockJs.Connected += async (sender, e) =>
                 {
                     try
                     {
                         Console.WriteLine("****************** Main: Open");
-                        await sockJs.Send(JsonConvert.SerializeObject(new { foo = "bar" }));
-                        await sockJs.Send("test");
+                        //await sockJs.Send(JsonConvert.SerializeObject(new { foo = "bar" }));
+                        //await sockJs.Send("test");
+
+                        StompMessageSerializer serializer = new StompMessageSerializer();
+
+                        var connect = new StompMessage("CONNECT");
+                        connect["accept-version"] = "1.2";
+                        connect["heart-beat"] = "10000,10000";
+                        await sockJs.Send(serializer.Serialize(connect));
+
+                        //var sub = new StompMessage("SUBSCRIBE");
+                        //sub["id"] = "sub-" + 111;
+                        //sub["destination"] = "/signal/public";
+                        //await sockJs.Send(serializer.Serialize(sub));
                     }
                     catch (Exception ex)
                     {
@@ -44,9 +57,16 @@ namespace syp.biz.SockJS.NET.Test
                     try
                     {
                         Console.WriteLine($"****************** Main: Message: {msg}");
-                        if (msg != "test") return;
-                        Console.WriteLine("****************** Main: Got back echo -> sending shutdown");
-                        await sockJs.Disconnect();
+                        if (msg.Contains("CONNECTED"))
+                        {
+                            StompMessageSerializer serializer = new StompMessageSerializer();
+                            var sub = new StompMessage("SUBSCRIBE");
+                            sub["id"] = "sub-" + 111;
+                            sub["destination"] = "/signal/public";
+                            await sockJs.Send(serializer.Serialize(sub));
+                        }
+                        //Console.WriteLine("****************** Main: Got back echo -> sending shutdown");
+                        //await sockJs.Disconnect();
                     }
                     catch (Exception ex)
                     {
